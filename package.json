@@ -1,0 +1,35 @@
+{
+  "name": "automation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Automates Codex CLI login via Puppeteer and IMAP.",
+  "type": "commonjs",
+  "main": "codex-auto-login.js",
+  "bin": {
+    "codex-auto-login": "./codex-auto-login.js"
+  },
+  "scripts": {
+    "start": "node codex-auto-login.js",
+    "dev": "node codex-auto-login.js --headful",
+    "login": "node codex-auto-login.js",
+    "force-login": "node codex-auto-login.js --force",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "codex",
+    "automation",
+    "puppeteer",
+    "imap",
+    "login"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "imap-simple": "^5.1.0",
+    "puppeteer": "^24.29.1"
+  }
+}
