@@ -3,7 +3,26 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { info, warn } = require('../views/logger');
 
-let puppeteer; // lazy load
+let puppeteer; // lazy load (puppeteer or puppeteer-extra)
+
+async function ensurePuppeteer() {
+  if (puppeteer) return puppeteer;
+  try {
+    const ppe = require('puppeteer-extra');
+    try {
+      const stealth = require('puppeteer-extra-plugin-stealth')();
+      ppe.use(stealth);
+      info('Using puppeteer-extra with stealth plugin.');
+    } catch (e) {
+      warn('puppeteer-extra-plugin-stealth not available; continuing without stealth.');
+    }
+    puppeteer = ppe;
+  } catch (e) {
+    puppeteer = require('puppeteer');
+    warn('puppeteer-extra not available; using puppeteer.');
+  }
+  return puppeteer;
+}
 
 function resolveCacheDir() {
   if (process.env.PUPPETEER_CACHE_DIR && process.env.PUPPETEER_CACHE_DIR.trim()) {
@@ -40,7 +59,7 @@ async function launchBrowser() {
   // Ensure a deterministic cache dir across build/runtime
   const cacheDir = resolveCacheDir();
 
-  if (!puppeteer) puppeteer = require('puppeteer');
+  if (!puppeteer) await ensurePuppeteer();
   const launchOpts = {
     headless: ENV.PUPPETEER_HEADLESS,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
@@ -125,6 +144,19 @@ async function clickByText(page, texts = []) {
   return false;
 }
 
+async function dismissConsents(page) {
+  const candidates = [
+    'accept all', 'accept', 'agree', 'allow all', 'i agree', 'ok', 'got it', 'only essential', 'continue', 'yes', 'save and accept'
+  ];
+  // Try several times; banners can be async
+  for (let i = 0; i < 5; i++) {
+    const clicked = await clickByText(page, candidates);
+    if (clicked) return true;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return false;
+}
+
 function bindTokenSniffer(page) {
   let token = null;
   let lastURL = '';
@@ -172,4 +204,4 @@ function bindTokenSniffer(page) {
   };
 }
 
-module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector };
+module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents };

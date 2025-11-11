@@ -5,7 +5,7 @@ const { sleep } = require('../utils/helpers');
 const { info, warn, error } = require('../views/logger');
 const { codexWhoAmI, discoverLoginURL } = require('../services/cliService');
 const { fetchVerificationCodeViaIMAP } = require('../services/imapService');
-const { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector } = require('../services/puppeteerService');
+const { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents } = require('../services/puppeteerService');
 
 async function performLoginAndCaptureToken() {
   if (!ENV.OPENAI_EMAIL || !ENV.OPENAI_PASSWORD) {
@@ -40,6 +40,7 @@ async function performLoginAndCaptureToken() {
   try {
     info(`Navigating to login URL: ${loginURL}`);
     await page.goto(loginURL, { waitUntil: 'networkidle2', timeout: 120000 });
+    await dismissConsents(page).catch(() => {});
 
     // Some flows require revealing the email form first
     await clickByText(page, [
@@ -72,6 +73,7 @@ async function performLoginAndCaptureToken() {
         try {
           info(`Email input not found; retrying via ${alt}`);
           await page.goto(alt, { waitUntil: 'networkidle2', timeout: 120000 });
+          await dismissConsents(page).catch(() => {});
           await clickByText(page, ['continue with email', 'use email', 'continue', 'log in', 'sign in']);
           await page.waitForNetworkIdle({ idleTime: 500, timeout: 15000 }).catch(() => {});
           emailInput = await waitForAnySelector(page, emailSelectors, 20000);
