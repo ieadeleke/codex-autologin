@@ -9,12 +9,10 @@ function resolveCacheDir() {
   if (process.env.PUPPETEER_CACHE_DIR && process.env.PUPPETEER_CACHE_DIR.trim()) {
     return process.env.PUPPETEER_CACHE_DIR;
   }
-  // Prefer Render default if running there; otherwise project-local cache
-  const renderDefault = '/opt/render/.cache/puppeteer';
+  // Use project-local cache so the build slug contains the browser
   const localDefault = path.join(process.cwd(), '.cache', 'puppeteer');
-  const chosen = process.env.RENDER ? renderDefault : localDefault;
-  process.env.PUPPETEER_CACHE_DIR = chosen;
-  return chosen;
+  process.env.PUPPETEER_CACHE_DIR = localDefault;
+  return localDefault;
 }
 
 function installChrome(cacheDir) {
@@ -57,7 +55,7 @@ async function launchBrowser() {
     return await puppeteer.launch(launchOpts);
   } catch (e) {
     const msg = String(e && e.message ? e.message : e || '');
-    if (/Could not find Chrome/i.test(msg) || /executable file not found/i.test(msg)) {
+    if (/Could not find Chrome/i.test(msg) || /executable file not found/i.test(msg) || /Browser was not found at the configured executablePath/i.test(msg)) {
       warn('Chrome not found for Puppeteer. Attempting runtime install...');
       const ok = await installChrome(cacheDir);
       if (!ok) throw e;

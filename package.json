@@ -14,7 +14,7 @@
     "login": "PUPPETEER_CACHE_DIR=.cache/puppeteer node codex-auto-login.js",
     "force-login": "node codex-auto-login.js --force",
     "browsers:install": "PUPPETEER_CACHE_DIR=.cache/puppeteer npx puppeteer browsers install chrome",
-    "postinstall": "npm run browsers:install",
+    "postinstall": "if [ \"$SKIP_BROWSER_INSTALL\" = \"1\" ]; then echo Skipping Chrome install; else npm run browsers:install; fi",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "engines": {
