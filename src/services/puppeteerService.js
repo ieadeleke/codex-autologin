@@ -1,15 +1,75 @@
 const { ENV } = require('../models/env');
+const path = require('path');
+const { execFile } = require('child_process');
+const { info, warn } = require('../views/logger');
 
 let puppeteer; // lazy load
 
+function resolveCacheDir() {
+  if (process.env.PUPPETEER_CACHE_DIR && process.env.PUPPETEER_CACHE_DIR.trim()) {
+    return process.env.PUPPETEER_CACHE_DIR;
+  }
+  // Prefer Render default if running there; otherwise project-local cache
+  const renderDefault = '/opt/render/.cache/puppeteer';
+  const localDefault = path.join(process.cwd(), '.cache', 'puppeteer');
+  const chosen = process.env.RENDER ? renderDefault : localDefault;
+  process.env.PUPPETEER_CACHE_DIR = chosen;
+  return chosen;
+}
+
+function installChrome(cacheDir) {
+  return new Promise((resolve) => {
+    const env = { ...process.env, PUPPETEER_CACHE_DIR: cacheDir };
+    info(`Puppeteer: installing Chrome into ${cacheDir} ...`);
+    execFile(
+      process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      ['--yes', 'puppeteer', 'browsers', 'install', 'chrome'],
+      { env, timeout: 5 * 60 * 1000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          warn(`Puppeteer browser install failed: ${stderr || err.message}`);
+          resolve(false);
+        } else {
+          info('Puppeteer browser install completed.');
+          resolve(true);
+        }
+      }
+    );
+  });
+}
+
 async function launchBrowser() {
+  // Ensure a deterministic cache dir across build/runtime
+  const cacheDir = resolveCacheDir();
+
   if (!puppeteer) puppeteer = require('puppeteer');
   const launchOpts = {
     headless: ENV.PUPPETEER_HEADLESS,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
   };
   if (ENV.PUPPETEER_EXECUTABLE_PATH) launchOpts.executablePath = ENV.PUPPETEER_EXECUTABLE_PATH;
-  return puppeteer.launch(launchOpts);
+  else if (typeof puppeteer.executablePath === 'function') {
+    const p = puppeteer.executablePath();
+    if (p) launchOpts.executablePath = p;
+  }
+
+  try {
+    return await puppeteer.launch(launchOpts);
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : e || '');
+    if (/Could not find Chrome/i.test(msg) || /executable file not found/i.test(msg)) {
+      warn('Chrome not found for Puppeteer. Attempting runtime install...');
+      const ok = await installChrome(cacheDir);
+      if (!ok) throw e;
+      // Refresh executable path after install
+      if (!ENV.PUPPETEER_EXECUTABLE_PATH && typeof puppeteer.executablePath === 'function') {
+        const p = puppeteer.executablePath();
+        if (p) launchOpts.executablePath = p;
+      }
+      return await puppeteer.launch(launchOpts);
+    }
+    throw e;
+  }
 }
 
 async function findInput(page, candidates) {
@@ -81,4 +141,3 @@ function bindTokenSniffer(page) {
 }
 
 module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer };
-
