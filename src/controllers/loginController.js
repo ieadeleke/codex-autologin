@@ -5,7 +5,7 @@ const { sleep } = require('../utils/helpers');
 const { info, warn, error } = require('../views/logger');
 const { codexWhoAmI, discoverLoginURL } = require('../services/cliService');
 const { fetchVerificationCodeViaIMAP } = require('../services/imapService');
-const { launchBrowser, findInput, clickByText, bindTokenSniffer } = require('../services/puppeteerService');
+const { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector } = require('../services/puppeteerService');
 
 async function performLoginAndCaptureToken() {
   if (!ENV.OPENAI_EMAIL || !ENV.OPENAI_PASSWORD) {
@@ -41,8 +41,48 @@ async function performLoginAndCaptureToken() {
     info(`Navigating to login URL: ${loginURL}`);
     await page.goto(loginURL, { waitUntil: 'networkidle2', timeout: 120000 });
 
-    const emailInput = await findInput(page, ['input[type=email]', 'input[name=email]', 'input#email', 'input[autocomplete=email]']);
-    if (!emailInput) throw new Error('Email input not found on login page. Consider setting CODEX_LOGIN_URL.');
+    // Some flows require revealing the email form first
+    await clickByText(page, [
+      'continue with email',
+      'use email',
+      'continue',
+      'log in',
+      'sign in'
+    ]);
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 15000 }).catch(() => {});
+
+    const emailSelectors = [
+      'input[type=email]',
+      'input[name=email]',
+      'input#email',
+      'input[autocomplete=email]',
+      'input[placeholder*="email" i]',
+      'input[name=username]',
+      'input[type=text]'
+    ];
+    let emailInput = await waitForAnySelector(page, emailSelectors, 20000);
+    if (!emailInput) {
+      // Retry on alternate known login endpoints
+      const alternates = [
+        'https://platform.openai.com/login',
+        'https://auth.openai.com/login',
+        'https://auth.openai.com/log-in'
+      ].filter((u) => u !== loginURL);
+      for (const alt of alternates) {
+        try {
+          info(`Email input not found; retrying via ${alt}`);
+          await page.goto(alt, { waitUntil: 'networkidle2', timeout: 120000 });
+          await clickByText(page, ['continue with email', 'use email', 'continue', 'log in', 'sign in']);
+          await page.waitForNetworkIdle({ idleTime: 500, timeout: 15000 }).catch(() => {});
+          emailInput = await waitForAnySelector(page, emailSelectors, 20000);
+          if (emailInput) break;
+        } catch {}
+      }
+    }
+    if (!emailInput) {
+      try { await page.screenshot({ path: 'login_debug.png', fullPage: true }); info('Saved screenshot: login_debug.png'); } catch {}
+      throw new Error('Email input not found on login page. Consider setting CODEX_LOGIN_URL.');
+    }
     await emailInput.click({ clickCount: 3 });
     await emailInput.type(ENV.OPENAI_EMAIL, { delay: 20 });
     await clickByText(page, ['continue', 'next', 'sign in', 'log in']);

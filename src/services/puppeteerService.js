@@ -70,22 +70,56 @@ async function launchBrowser() {
   }
 }
 
+function framesList(page) {
+  const frames = [];
+  try { frames.push(page); } catch {}
+  try { for (const f of page.frames()) frames.push(f); } catch {}
+  return frames;
+}
+
 async function findInput(page, candidates) {
-  for (const sel of candidates) {
-    const el = await page.$(sel);
+  const frames = framesList(page);
+  for (const frame of frames) {
+    for (const sel of candidates) {
+      try {
+        const el = await frame.$(sel);
+        if (el) return el;
+      } catch {}
+    }
+  }
+  return null;
+}
+
+async function waitForAnySelector(page, selectors = [], timeoutMs = 15000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const el = await findInput(page, selectors);
     if (el) return el;
+    await new Promise((r) => setTimeout(r, 300));
   }
   return null;
 }
 
 async function clickByText(page, texts = []) {
   const lc = texts.map((t) => t.toLowerCase());
-  const handles = await page.$$('button, input[type=submit], a');
-  for (const h of handles) {
-    const label = (await page.evaluate((el) => (el.innerText || el.value || '').trim(), h)).toLowerCase();
-    if (lc.some((t) => label.includes(t))) {
-      await h.click();
-      return true;
+  const frames = framesList(page);
+  for (const frame of frames) {
+    const handles = await frame.$$('button, input[type=submit], a, [role=button]');
+    for (const h of handles) {
+      const label = (await frame.evaluate((el) => (el.innerText || el.value || '').trim(), h)).toLowerCase();
+      if (lc.some((t) => label.includes(t))) {
+        try { await h.click(); return true; } catch {}
+      }
+    }
+    // Fallback with XPath contains search (case-insensitive)
+    for (const t of lc) {
+      const xp = `//*[contains(translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${t}')]`;
+      try {
+        const els = await frame.$x(xp);
+        for (const el of els) {
+          try { await el.click(); return true; } catch {}
+        }
+      } catch {}
     }
   }
   return false;
@@ -138,4 +172,4 @@ function bindTokenSniffer(page) {
   };
 }
 
-module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer };
+module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector };
