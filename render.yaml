@@ -1,0 +1,29 @@
+services:
+  - type: worker
+    name: codex-autologin
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_EMAIL
+        sync: false
+      - key: OPENAI_PASSWORD
+        sync: false
+      - key: IMAP_HOST
+        sync: false
+      - key: IMAP_PORT
+        sync: false
+      - key: IMAP_USER
+        sync: false
+      - key: IMAP_PASS
+        sync: false
+      - key: IMAP_TLS
+        value: "true"
+      - key: VERIFICATION_TIMEOUT_MS
+        value: "180000"
+      - key: PUPPETEER_HEADLESS
+        value: "true"
+      - key: CODEX_CLI_BIN
+        value: "codex"
+      - key: CODEX_CONFIG_PATH
+        value: "/usr/src/app/.codex/config.json"

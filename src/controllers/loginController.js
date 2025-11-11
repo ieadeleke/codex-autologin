@@ -15,8 +15,25 @@ async function performLoginAndCaptureToken() {
   const loginURL = await discoverLoginURL();
   info(`Launching Puppeteer (headless=${ENV.PUPPETEER_HEADLESS}).`);
   const browser = await launchBrowser();
-  const context = await browser.createIncognitoBrowserContext();
-  const page = await context.newPage();
+  let context = null;
+  let page = null;
+  try {
+    if (typeof browser.createIncognitoBrowserContext === 'function') {
+      context = await browser.createIncognitoBrowserContext();
+    } else if (typeof browser.createBrowserContext === 'function') {
+      // Newer Puppeteer API (BiDi)
+      context = await browser.createBrowserContext();
+    } else if (typeof browser.defaultBrowserContext === 'function') {
+      context = browser.defaultBrowserContext();
+    }
+  } catch {}
+  if (context && typeof context.newPage === 'function') {
+    page = await context.newPage();
+  } else {
+    // Fallback: open a page directly on the browser
+    page = await browser.newPage();
+    try { context = page.browserContext(); } catch {}
+  }
   await page.setViewport({ width: 1280, height: 900 });
   const sniffer = bindTokenSniffer(page);
 
@@ -102,9 +119,9 @@ async function performLoginAndCaptureToken() {
     info(`Captured token (${source}).`);
     return { token, source, lastURL };
   } finally {
-    try { await page.close(); } catch {}
-    try { await context.close(); } catch {}
-    try { await browser.close(); } catch {}
+    try { if (page && typeof page.close === 'function') await page.close(); } catch {}
+    try { if (context && typeof context.close === 'function') await context.close(); } catch {}
+    try { if (browser && typeof browser.close === 'function') await browser.close(); } catch {}
   }
 }
 
@@ -137,4 +154,3 @@ async function main() {
 }
 
 module.exports = { main };
-
