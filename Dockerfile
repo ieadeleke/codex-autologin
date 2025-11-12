@@ -9,10 +9,10 @@ ENV NODE_ENV=production \
     SKIP_BROWSER_INSTALL=1
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+# Use npm install instead of npm ci to tolerate lockfile drift
+RUN npm install --omit=dev
 
 COPY . .
 
 # Default command (Render Worker can use the image CMD)
 CMD ["node", "codex-auto-login.js"]
-
