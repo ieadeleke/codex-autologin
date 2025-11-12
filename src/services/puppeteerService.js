@@ -157,6 +157,24 @@ async function dismissConsents(page) {
   return false;
 }
 
+async function domSnapshot(page, limit = 1200) {
+  try {
+    const url = page.url();
+    const title = await page.title().catch(() => '');
+    const text = await page.evaluate(() => (document.body && document.body.innerText) || '').catch(() => '');
+    const frames = [];
+    try {
+      for (const f of page.frames()) {
+        try { frames.push({ url: f.url(), name: f.name && f.name() }); } catch {}
+      }
+    } catch {}
+    const trimmed = String(text).replace(/\s+/g, ' ').slice(0, limit);
+    return { url, title, text: trimmed, frames };
+  } catch {
+    return null;
+  }
+}
+
 function bindTokenSniffer(page) {
   let token = null;
   let lastURL = '';
@@ -204,4 +222,4 @@ function bindTokenSniffer(page) {
   };
 }
 
-module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents };
+module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents, domSnapshot };

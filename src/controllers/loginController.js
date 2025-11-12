@@ -34,7 +34,20 @@ async function performLoginAndCaptureToken() {
     page = await browser.newPage();
     try { context = page.browserContext(); } catch {}
   }
-  await page.setViewport({ width: 1280, height: 900 });
+  await page.setViewport({ width: 1366, height: 900 });
+  try {
+    const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
+    await page.setUserAgent(ua);
+  } catch {}
+  try { await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' }); } catch {}
+  try { await page.emulateTimezone('America/Los_Angeles'); } catch {}
+  try {
+    await page.evaluateOnNewDocument(() => {
+      try { Object.defineProperty(navigator, 'language', { get: () => 'en-US' }); } catch {}
+      try { Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] }); } catch {}
+      try { Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' }); } catch {}
+    });
+  } catch {}
   const sniffer = bindTokenSniffer(page);
 
   try {
@@ -48,7 +61,9 @@ async function performLoginAndCaptureToken() {
       'use email',
       'continue',
       'log in',
-      'sign in'
+      'sign in',
+      'sign in with email',
+      'email'
     ]);
     await page.waitForNetworkIdle({ idleTime: 500, timeout: 15000 }).catch(() => {});
 
@@ -59,7 +74,9 @@ async function performLoginAndCaptureToken() {
       'input[autocomplete=email]',
       'input[placeholder*="email" i]',
       'input[name=username]',
-      'input[type=text]'
+      'input[type=text]',
+      'input#username',
+      'input[autocomplete=username]'
     ];
     let emailInput = await waitForAnySelector(page, emailSelectors, 20000);
     if (!emailInput) {
@@ -83,14 +100,29 @@ async function performLoginAndCaptureToken() {
     }
     if (!emailInput) {
       try { await page.screenshot({ path: 'login_debug.png', fullPage: true }); info('Saved screenshot: login_debug.png'); } catch {}
+      try {
+        const snap = await (require('../services/puppeteerService').domSnapshot)(page, 1500);
+        if (snap) {
+          info(`DOM snapshot url=${snap.url} title=${snap.title}`);
+          info(`Frames: ${JSON.stringify(snap.frames)}`);
+          info(`Body text (truncated): ${snap.text}`);
+        }
+      } catch {}
       throw new Error('Email input not found on login page. Consider setting CODEX_LOGIN_URL.');
     }
     await emailInput.click({ clickCount: 3 });
-    await emailInput.type(ENV.OPENAI_EMAIL, { delay: 20 });
-    await clickByText(page, ['continue', 'next', 'sign in', 'log in']);
+    await emailInput.type(ENV.OPENAI_EMAIL, { delay: 35 });
+    // click Continue and also press Enter as a fallback
+    await clickByText(page, ['continue', 'next', 'sign in', 'log in', 'continue with email']);
+    try { await page.keyboard.press('Enter'); } catch {}
     await page.waitForNetworkIdle({ idleTime: 700, timeout: 60000 }).catch(() => {});
 
-    const passwordInput = await findInput(page, ['input[type=password]', 'input[name=password]', 'input#password', 'input[autocomplete=current-password]']);
+    const passwordInput = await findInput(page, [
+      'input[type=password]',
+      'input[name=password]',
+      'input#password',
+      'input[autocomplete=current-password]'
+    ]);
     if (!passwordInput) throw new Error('Password input not found after email submit.');
     await passwordInput.click({ clickCount: 3 });
     await passwordInput.type(ENV.OPENAI_PASSWORD, { delay: 20 });
