@@ -26,4 +26,4 @@ services:
       - key: CODEX_CLI_BIN
         value: "codex"
       - key: CODEX_CONFIG_PATH
-        value: "/usr/src/app/.codex/config.json"
+        value: "~/.codex/config.json"
