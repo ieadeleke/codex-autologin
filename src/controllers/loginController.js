@@ -113,21 +113,47 @@ async function performLoginAndCaptureToken() {
     await emailInput.click({ clickCount: 3 });
     await emailInput.type(ENV.OPENAI_EMAIL, { delay: 35 });
     // click Continue and also press Enter as a fallback
-    await clickByText(page, ['continue', 'next', 'sign in', 'log in', 'continue with email']);
+    await clickByText(page, ['continue with email', 'use email', 'continue', 'next', 'sign in', 'log in']);
     try { await page.keyboard.press('Enter'); } catch {}
     await page.waitForNetworkIdle({ idleTime: 700, timeout: 60000 }).catch(() => {});
 
-    const passwordInput = await findInput(page, [
+    // After submitting email, the password input renders asynchronously.
+    // Wait explicitly and try a few UX variants (e.g., "use password instead").
+    let passwordInput = await waitForAnySelector(page, [
       'input[type=password]',
       'input[name=password]',
       'input#password',
       'input[autocomplete=current-password]'
-    ]);
-    if (!passwordInput) throw new Error('Password input not found after email submit.');
-    await passwordInput.click({ clickCount: 3 });
-    await passwordInput.type(ENV.OPENAI_PASSWORD, { delay: 20 });
-    await clickByText(page, ['continue', 'next', 'sign in', 'log in']);
-    await page.waitForNetworkIdle({ idleTime: 700, timeout: 60000 }).catch(() => {});
+    ], 45000);
+    if (!passwordInput) {
+      // Some flows gate the password field behind a secondary button/link
+      await clickByText(page, [
+        'use password',
+        'use password instead',
+        'sign in with password',
+        'continue',
+        'next',
+        'log in',
+        'sign in'
+      ]);
+      await page.waitForNetworkIdle({ idleTime: 600, timeout: 30000 }).catch(() => {});
+      passwordInput = await waitForAnySelector(page, [
+        'input[type=password]',
+        'input[name=password]',
+        'input#password',
+        'input[autocomplete=current-password]'
+      ], 30000);
+    }
+    if (passwordInput) {
+      await passwordInput.click({ clickCount: 3 });
+      await passwordInput.type(ENV.OPENAI_PASSWORD, { delay: 20 });
+      await clickByText(page, ['continue', 'next', 'sign in', 'log in']);
+      await page.waitForNetworkIdle({ idleTime: 700, timeout: 60000 }).catch(() => {});
+    } else {
+      // Some tenants default to magic code without password. Proceed to OTP detection below.
+      try { await page.screenshot({ path: 'password_debug.png', fullPage: true }); info('Saved screenshot: password_debug.png'); } catch {}
+      warn('Password step not shown; continuing to check for verification code.');
+    }
 
     const codeField = await findInput(page, [
       'input[name=code]',

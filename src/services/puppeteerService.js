@@ -120,22 +120,45 @@ async function waitForAnySelector(page, selectors = [], timeoutMs = 15000) {
 }
 
 async function clickByText(page, texts = []) {
-  const lc = texts.map((t) => t.toLowerCase());
+  const lc = texts.map((t) => String(t || '').toLowerCase());
   const frames = framesList(page);
+  const providerWords = ['google', 'microsoft', 'apple', 'github', 'sso'];
+  const ambiguous = new Set(['continue', 'sign in', 'log in', 'next', 'verify', 'submit']);
+
+  function isProviderLike(label) {
+    const l = label.toLowerCase();
+    return providerWords.some((w) => l.includes(w));
+  }
+
   for (const frame of frames) {
     const handles = await frame.$$('button, input[type=submit], a, [role=button]');
+
+    // Pass 1: prefer exact text matches to avoid partial collisions (e.g., "Continue with Google")
     for (const h of handles) {
       const label = (await frame.evaluate((el) => (el.innerText || el.value || '').trim(), h)).toLowerCase();
-      if (lc.some((t) => label.includes(t))) {
+      if (lc.includes(label)) {
         try { await h.click(); return true; } catch {}
       }
     }
-    // Fallback with XPath contains search (case-insensitive)
+
+    // Pass 2: substring matches, but avoid provider-specific buttons for ambiguous terms
+    for (const h of handles) {
+      const label = (await frame.evaluate((el) => (el.innerText || el.value || '').trim(), h)).toLowerCase();
+      for (const t of lc) {
+        if (!label.includes(t)) continue;
+        if (ambiguous.has(t) && isProviderLike(label)) continue; // skip e.g. "Continue with Google"
+        try { await h.click(); return true; } catch {}
+      }
+    }
+
+    // Fallback: XPath contains search (case-insensitive), with the same provider guard
     for (const t of lc) {
-      const xp = `//*[contains(translate(normalize-space(text()), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${t}')]`;
+      const xp = `//*[contains(translate(normalize-space(string(.)), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${t}')]`;
       try {
         const els = await frame.$x(xp);
         for (const el of els) {
+          const label = (await frame.evaluate((node) => (node.innerText || node.textContent || '').trim(), el)).toLowerCase();
+          if (ambiguous.has(t) && isProviderLike(label)) continue;
           try { await el.click(); return true; } catch {}
         }
       } catch {}
