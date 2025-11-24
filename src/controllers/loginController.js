@@ -54,6 +54,16 @@ async function performLoginAndCaptureToken() {
     info(`Navigating to login URL: ${loginURL}`);
     await page.goto(loginURL, { waitUntil: 'networkidle2', timeout: 120000 });
     await dismissConsents(page).catch(() => {});
+    // Some OAuth entrypoints sporadically show "Invalid client". Detect and retry via platform.openai.com.
+    try {
+      const bad = await page.$x("//*[contains(translate(normalize-space(string(.)),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'invalid client')]");
+      if (bad && bad.length) {
+        try { await page.screenshot({ path: 'invalid_client.png', fullPage: true }); info('Saved screenshot: invalid_client.png'); } catch {}
+        warn('Detected "Invalid client" at initial URL; retrying via https://platform.openai.com/login');
+        await page.goto('https://platform.openai.com/login', { waitUntil: 'networkidle2', timeout: 120000 });
+        await dismissConsents(page).catch(() => {});
+      }
+    } catch {}
 
     // Some flows require revealing the email form first
     await clickByText(page, [
@@ -66,6 +76,16 @@ async function performLoginAndCaptureToken() {
       'email'
     ]);
     await page.waitForNetworkIdle({ idleTime: 500, timeout: 15000 }).catch(() => {});
+    // Re-check after the initial action in case the server reported an OAuth client error
+    try {
+      const bad2 = await page.$x("//*[contains(translate(normalize-space(string(.)),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'invalid client')]");
+      if (bad2 && bad2.length) {
+        try { await page.screenshot({ path: 'invalid_client_after_click.png', fullPage: true }); info('Saved screenshot: invalid_client_after_click.png'); } catch {}
+        warn('Detected "Invalid client" after initial action; switching to https://platform.openai.com/login');
+        await page.goto('https://platform.openai.com/login', { waitUntil: 'networkidle2', timeout: 120000 });
+        await dismissConsents(page).catch(() => {});
+      }
+    } catch {}
 
     const emailSelectors = [
       'input[type=email]',

@@ -31,8 +31,9 @@ async function discoverLoginURL() {
     const maybeURL = (text.match(/https?:\/[\w\-.~:?#\[\]@!$&'()*+,;=%/]+/i) || [])[0];
     if (maybeURL) return maybeURL;
   }
-  warn('Could not discover login URL from CLI. Falling back to https://auth.openai.com/login');
-  return 'https://auth.openai.com/login';
+  // Using platform.openai.com as a safer entry that issues a proper authorize URL
+  warn('Could not discover login URL from CLI. Falling back to https://platform.openai.com/login');
+  return 'https://platform.openai.com/login';
 }
 
 module.exports = { runCLI, codexWhoAmI, discoverLoginURL };

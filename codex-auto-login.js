@@ -30,14 +30,15 @@ Environment — Puppeteer & CLI config (optional):
   PUPPETEER_EXECUTABLE_PATH=/path/to/chrome
   CODEX_CLI_BIN=codex
   CODEX_CONFIG_PATH=~/.codex/config.json
-  CODEX_LOGIN_URL=...
+  CODEX_LOGIN_URL=...  # Prefer a fresh URL from `codex login --print-url` on this machine (do NOT hardcode /log-in)
   CODEX_TOKEN_SELECTOR=pre,code,.token,.cli-token
   CODEX_TOKEN_KEY=token
 
 Usage:
   1) Create a dedicated mailbox and set a forward rule from your main OpenAI email to it.
   2) Put OPENAI_EMAIL/OPENAI_PASSWORD and IMAP_* in .env.
-  3) Run: node automation/codex-auto-login.js
+  3) Ensure `codex` is installed and on PATH so we can discover a fresh login URL each run. As a fallback, you may set CODEX_LOGIN_URL to the output of `codex login --print-url` (time-sensitive).
+  4) Run: node automation/codex-auto-login.js
 
 Gmail forwarding quick ref:
   Settings → See all settings → Forwarding and POP/IMAP → add forwarding address → confirm.
