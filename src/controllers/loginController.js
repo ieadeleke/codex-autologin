@@ -3,7 +3,7 @@ const { saveConfigToken } = require('../models/config');
 const { expandTilde } = require('../utils/file');
 const { sleep } = require('../utils/helpers');
 const { info, warn, error } = require('../views/logger');
-const { codexWhoAmI, discoverLoginURL } = require('../services/cliService');
+const { codexWhoAmI, discoverLoginURL, codexLoginWithToken } = require('../services/cliService');
 const { fetchVerificationCodeViaIMAP } = require('../services/imapService');
 const { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents } = require('../services/puppeteerService');
 
@@ -258,8 +258,15 @@ async function main() {
   const result = await performLoginAndCaptureToken();
 
   if (result.token) {
-    saveConfigToken(result.token);
-    info(`Token saved to ${expandTilde(ENV.CODEX_CONFIG_PATH)} with restricted permissions.`);
+    // First try to let the official CLI persist the token (works regardless of config file path)
+    const attempt = await codexLoginWithToken(result.token).catch(() => ({ success: false }));
+    if (attempt && attempt.success) {
+      info('Applied token via codex CLI.');
+    } else {
+      // Fallback: write to known config path
+      saveConfigToken(result.token);
+      info(`Token saved to ${expandTilde(ENV.CODEX_CONFIG_PATH)} with restricted permissions.`);
+    }
   } else {
     info('Attempting to verify login via codex whoami...');
   }
@@ -268,6 +275,11 @@ async function main() {
   if (who.success) {
     info('Codex login verified successfully.');
   } else {
+    if (who.missingCLI && result.token) {
+      warn('codex CLI is not installed or not on PATH. Token has been saved; install codex and run `codex whoami` to verify.');
+      process.exitCode = 0;
+      return;
+    }
     error('Codex login still not verified. You may need to set CODEX_LOGIN_URL or CODEX_TOKEN_SELECTOR appropriately, or re-check IMAP forwarding.');
     process.exitCode = 1;
   }
