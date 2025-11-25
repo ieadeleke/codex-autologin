@@ -1,6 +1,6 @@
 const { execFile, spawn } = require('child_process');
 const { ENV } = require('../models/env');
-const { warn } = require('../views/logger');
+const { warn, info } = require('../views/logger');
 
 function runCLI(args, opts = {}) {
   return new Promise((resolve) => {
@@ -23,7 +23,21 @@ async function codexWhoAmI() {
 }
 
 async function discoverLoginURL() {
-  if (ENV.CODEX_LOGIN_URL) return ENV.CODEX_LOGIN_URL;
+  if (ENV.CODEX_LOGIN_URL) {
+    const raw = ENV.CODEX_LOGIN_URL.trim();
+    try {
+      const u = new URL(raw);
+      const p = (u.pathname || '').toLowerCase();
+      if (u.hostname === 'auth.openai.com' && (/^\/log-?in\/?$/.test(p) || /^\/login\/?$/.test(p))) {
+        warn(`ENV CODEX_LOGIN_URL is ${u.href}; switching to https://platform.openai.com/login to avoid Invalid client.`);
+        return 'https://platform.openai.com/login';
+      }
+      info(`Using CODEX_LOGIN_URL override: ${u.href}`);
+      return u.href;
+    } catch {
+      warn('Invalid CODEX_LOGIN_URL format; ignoring env override.');
+    }
+  }
   const candidates = [
     ['login', '--print-url'],
     ['login', '--show-url'],
