@@ -180,6 +180,28 @@ async function dismissConsents(page) {
   return false;
 }
 
+// Some users report consent only appears reliably on chatgpt.com, and once accepted
+// the login flow on auth.openai.com stops showing "Invalid client". Do a quick pass
+// on chatgpt.com to accept cookies before continuing.
+async function preflightCookieConsent(page) {
+  const urls = [
+    'https://chatgpt.com/auth/login',
+    'https://chatgpt.com',
+  ];
+  for (const url of urls) {
+    try {
+      info(`Pre-consent check at ${url}`);
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      const ok = await dismissConsents(page);
+      if (ok) {
+        info('Cookie consent accepted on chatgpt.com');
+        return true;
+      }
+    } catch {}
+  }
+  return false;
+}
+
 async function domSnapshot(page, limit = 1200) {
   try {
     const url = page.url();
@@ -245,4 +267,4 @@ function bindTokenSniffer(page) {
   };
 }
 
-module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents, domSnapshot };
+module.exports = { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents, domSnapshot, preflightCookieConsent };

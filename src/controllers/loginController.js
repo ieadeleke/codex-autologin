@@ -5,7 +5,7 @@ const { sleep } = require('../utils/helpers');
 const { info, warn, error } = require('../views/logger');
 const { codexWhoAmI, discoverLoginURL, codexLoginWithToken } = require('../services/cliService');
 const { fetchVerificationCodeViaIMAP } = require('../services/imapService');
-const { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents } = require('../services/puppeteerService');
+const { launchBrowser, findInput, clickByText, bindTokenSniffer, waitForAnySelector, dismissConsents, preflightCookieConsent } = require('../services/puppeteerService');
 
 async function performLoginAndCaptureToken() {
   if (!ENV.OPENAI_EMAIL || !ENV.OPENAI_PASSWORD) {
@@ -51,6 +51,9 @@ async function performLoginAndCaptureToken() {
   const sniffer = bindTokenSniffer(page);
 
   try {
+    // Preflight: accept cookie consent on chatgpt.com if present
+    try { await preflightCookieConsent(page); } catch {}
+
     info(`Navigating to login URL: ${loginURL}`);
     await page.goto(loginURL, { waitUntil: 'networkidle2', timeout: 120000 });
     await dismissConsents(page).catch(() => {});
